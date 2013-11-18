@@ -255,21 +255,21 @@ task(clean_src_jfx) << {
 task copyRTLibs(type: Copy) {
     def JDK_PATH=JDK_8_IMAGE_OSX
 
-    from 'build/mac-sdk/rt/lib'
+    from JFX8_SRC + '/build/mac-sdk/rt/lib'
     into JDK_PATH+'/jre/lib'
 }
 
 task copyLibs(type: Copy) {
      def JDK_PATH=JDK_8_IMAGE_OSX
 
-     from 'build/mac-sdk/lib'
+     from JFX8_SRC + '/build/mac-sdk/lib'
      into JDK_PATH+'/lib'
 }
 
 task copyBin(type: Copy) {
     def JDK_PATH=JDK_8_IMAGE_OSX
 
-    from 'build/mac-sdk/bin'
+    from JFX8_SRC + '/build/mac-sdk/bin'
     into JDK_PATH+'/bin'
 }
 
