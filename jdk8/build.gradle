@@ -1,0 +1,301 @@
+task wrapper(type: Wrapper) {
+    gradleVersion = '1.8'
+}
+
+def JDK8_SRC    = "jdk8-src"
+def JFX8_SRC    = "jfx8-src"
+def JFX8_BRANCH = "graphics"
+
+def BOOTSTRAP_JDK = "/Library/Java/JavaVirtualMachines/jdk1.7.0_45.jdk/Contents/Home/"
+// def DEVKIT        = "/Applications/Xcode4.6.3.app/Contents/Developer/usr/bin/"
+def DEVKIT        = "/Applications/Xcode.app/Contents/Developer/usr/bin/"
+def MILESTONE     = "1"
+def BUILD_NUMBER  = "115"
+def DEBUG_LEVEL   = "release"
+	
+def BINARY_STUB   = "binary_stub/jfxrt.jar"
+// def MACOSX_SDK    = "/Applications/Xcode4.6.3.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.7.sdk" 
+def MACOSX_SDK    = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.7.sdk" 
+	
+def JDK_8_BUNDLE_OSX=JDK8_SRC + "/build/macosx-x86_64-normal-server-$DEBUG_LEVEL/images/j2sdk-bundle/jdk1.8.0.jdk"
+def JDK_8_IMAGE_OSX=JDK8_SRC + "/build/macosx-x86_64-normal-server-$DEBUG_LEVEL/images/j2sdk-bundle/jdk1.8.0.jdk/Contents/Home"
+	
+def CMD_HG = "hg"
+def CMD_HG_CLONE_JDK=CMD_HG + " clone http://hg.openjdk.java.net/jdk8/jdk8 " + JDK8_SRC
+def CMD_HG_CLONE_JFX=CMD_HG + " clone http://hg.openjdk.java.net/openjfx/8/$JFX8_BRANCH/rt " + JFX8_SRC
+	
+task(clean_src_jdk) << {
+	new File(JDK8_SRC).deleteDir();
+	new File(JDK8_SRC).delete();
+}
+
+task(check_hg) << {
+	
+	def proc = "hg --version".execute();
+	proc.waitFor()
+	
+	if (proc.exitValue() != 0) {
+		System.err.println(">> ERROR: Mercurial not installed!\n"+
+			 ">> --> possible solution: install mercurial from http://mercurial.selenic.com")
+		System.exit(1)
+	}
+}
+
+task update_jdk(dependsOn: check_hg) << {
+	
+	def CMD_UPDATE_SRC="bash ./get_source.sh"
+
+	if (!new File(JDK8_SRC).isDirectory()) {
+		
+		println(">> No code available, cloning...")
+			
+		def proc = CMD_HG_CLONE_JDK.execute();
+
+		proc.in.eachLine {line -> println line}
+		proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+		proc.waitFor()
+	} else {
+		println(">> Code available, updating...")
+	}
+	
+	def CMD_HG_PULL_JDK_SRC = CMD_HG + " pull"
+	def proc = CMD_HG_PULL_JDK_SRC.execute(null,new File(JDK8_SRC));
+
+	proc.in.eachLine {line -> println line}
+	proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+	proc.waitFor()
+		
+	def CMD_HG_UPDATE_JDK_SRC = CMD_HG + " update"
+	proc = CMD_HG_UPDATE_JDK_SRC.execute(null,new File(JDK8_SRC));
+	
+	proc.in.eachLine {line -> println line}
+	proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+	proc.waitFor()
+	
+	proc = CMD_UPDATE_SRC.execute(null,new File(JDK8_SRC));
+	
+	proc.in.eachLine {line -> println line}
+	proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+	proc.waitFor();
+		
+}
+
+task(assemble_jdk) << {
+	
+	// CHECK REQUIREMENTS
+	if (!new File(JDK8_SRC+"/configure").exists()) {
+		System.err.println(">> ERROR: source code not available, please call 'update_jdk' or 'update' task before assembling!")
+		System.exit(1);
+	}
+	if (!new File("/opt/X11/bin/x").exists()) {
+		System.err.println(">> ERROR: X11 not availaible (needed for libfreetype)");
+		System.err.println(">> --> possible solution: install XQuartz from 'http://xquartz.macosforge.org'!")
+		System.exit(1);
+	}
+	if (!new File(BOOTSTRAP_JDK).exists()) {
+		System.err.println(">> ERROR: specified bootstrap jdk not found at $BOOTSTRAP_JDK")
+		System.err.println(">> --> possible solution: install specified jdk or change jdk path")
+		System.exit(1);
+	}
+	
+	// CONFIG
+	def CMD_CONFIG = "bash ./configure "+
+		"--with-debug-level=$DEBUG_LEVEL "+
+		"--with-milestone=$MILESTONE "+
+        "--with-boot-jdk=$BOOTSTRAP_JDK "+
+        "--with-build-number=$BUILD_NUMBER "+
+		"--with-devkit=$DEVKIT "
+			
+	def proc = CMD_CONFIG.execute(null,new File(JDK8_SRC));
+	
+	proc.in.eachLine {line -> println line}
+	proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+	proc.waitFor();
+	
+	// BUILDING
+	def CMD_MAKE = "make images"
+		
+	proc = CMD_MAKE.execute(null,new File(JDK8_SRC));
+		
+	proc.in.eachLine {line -> println line}
+	proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+	proc.waitFor();
+
+}
+
+task(clean_jdk) << {
+	def CMD_MAKE_CLEAN = "make clean";
+	
+	def proc = CMD_MAKE_CLEAN.execute(null,new File(JDK8_SRC));
+		
+	proc.in.eachLine {line -> println line}
+	proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+	proc.waitFor();
+	
+}
+
+task update_jfx(dependsOn: check_hg) << {
+	
+	if (!new File(JFX8_SRC).isDirectory()) {
+		
+		println(">> No code available, cloning...")
+		
+		def proc = CMD_HG_CLONE_JFX.execute();
+		
+		proc.in.eachLine {line -> println line}
+		proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+		proc.waitFor()
+	} else {
+		println(">> Code available, updating...")
+			
+		def CMD_HG_PULL_JFX_SRC = CMD_HG + " pull"
+		def proc = CMD_HG_PULL_JFX_SRC.execute(null,new File(JFX8_SRC));
+
+		proc.in.eachLine {line -> println line}
+		proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+		proc.waitFor()
+			
+		def CMD_HG_UPDATE_JFX_SRC = CMD_HG + " update"
+		proc = CMD_HG_UPDATE_JFX_SRC.execute(null,new File(JFX8_SRC));
+		
+		proc.in.eachLine {line -> println line}
+		proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+		proc.waitFor()
+	}	
+	
+}
+
+task(assemble_jfx) << {
+	
+	// CHECK REQUIREMENTS
+	if (!new File(JFX8_SRC+"/build.gradle").exists()) {
+		System.err.println(">> ERROR: source code not available, please call 'update_jfx' or 'update' task before assembling!")
+		System.exit(1);
+	}
+	if (!new File(JDK_8_IMAGE_OSX).exists()) {
+		System.err.println(">> ERROR: jdk image does not exist, please call 'assemble_jdk' task before assembling jfx!")
+		System.exit(1);
+	}
+	if (!new File(BINARY_STUB).exists()) {
+		System.err.println(">> ERROR: specified binary stub jfxrt.jar not found at $BINARY_STUB")
+		System.err.println(">> --> possible solution: copy jfxrt.jar to the specified location or change the path")
+		System.exit(1);
+	}
+	
+	// CREATING GRADLE CONFIG
+	def GRADLE_PROPERTIES="MACOSX_SDK_PATH = $MACOSX_SDK\nBINARY_STUB=../$BINARY_STUB"
+	new File(JFX8_SRC+"/gradle.properties").write(GRADLE_PROPERTIES)
+
+	// DISABLING BROKEN VERIFYJAVA TASK <BEGIN>
+	def BUILD_GRADLE=JFX8_SRC + "/build.gradle" as File
+	def buildGradleContent = BUILD_GRADLE.text;	
+
+	def MARKER = "  // eu.mihosoft.openjfx:disable-fail  "
+	def REPLACED_LINE = "def buildNum = Integer.MAX_VALUE"
+	def lines = buildGradleContent.split('\n');
+	boolean containsFail = false;
+	def newLines = []
+		
+	for(String l : lines) {
+		if (l.contains("def buildNum = Integer.parseInt(jdkBuildNumber)")) {
+			containsFail = true;
+			newL = REPLACED_LINE + MARKER + l;
+		} else {
+			newL = l;
+		}
+		newLines.add(newL)
+	}
+		
+	boolean alreadyCommented = false;
+	for(String l : lines) {
+		if(l.contains(MARKER)) {
+			alreadyCommented = true;
+			break;
+		}
+	}
+	if (containsFail && !alreadyCommented) {
+		def buildGradleContentNew = "";
+		newLines.each{line->buildGradleContentNew+=line+'\n'}
+		BUILD_GRADLE.write(buildGradleContentNew)
+	}
+	
+	// DISABLING BROKEN VERIFYJAVA TASK <END>
+	
+	// ASSEMBLING JFX 8 SDK
+	def CMD_GRADLE_SDK_TASK = "../gradlew -PBUILD_NATIVES=true -PBUILD_WEBKIT=true sdk"
+	def PATH = System.getenv()["PATH"]
+	def proc = CMD_GRADLE_SDK_TASK.execute(["JAVA_HOME="+new File(JDK_8_IMAGE_OSX).getAbsolutePath(), "PATH=" + new File(JDK_8_IMAGE_OSX).getAbsolutePath() + "/bin:$PATH"], new File(JFX8_SRC));
+
+	proc.in.eachLine {line -> println line}
+	proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+	proc.waitFor()
+
+	// REVERT TEMPORARY CHANGES TO build.gradle
+	if(containsFail || alreadyCommented) {
+		"hg revert build.gradle".execute(null,, new File(JFX8_SRC)).waitFor()
+	}
+}
+
+task(clean_jfx) << {
+	def CMD_MAKE_CLEAN = "../gradlew clean"
+	
+	def proc = CMD_MAKE_CLEAN.execute(null,new File(JFX8_SRC));
+		
+	proc.in.eachLine {line -> println line}
+	proc.err.eachLine {line -> System.err.println( 'ERROR: ' + line)}
+	proc.waitFor();
+	
+}
+
+task(clean_src_jfx) << {
+	new File(JFX8_SRC).deleteDir();
+	new File(JFX8_SRC).delete();
+}
+
+task copyRTLibs(type: Copy) {
+    def JDK_PATH=JDK_8_IMAGE_OSX
+
+    from 'build/mac-sdk/rt/lib'
+    into JDK_PATH+'/jre/lib'
+}
+
+task copyLibs(type: Copy) {
+     def JDK_PATH=JDK_8_IMAGE_OSX
+
+     from 'build/mac-sdk/lib'
+     into JDK_PATH+'/lib'
+}
+
+task copyBin(type: Copy) {
+    def JDK_PATH=JDK_8_IMAGE_OSX
+
+    from 'build/mac-sdk/bin'
+    into JDK_PATH+'/bin'
+}
+
+
+task addToOpenJdk() << {
+
+    System.out.println("JAVA: "+System.getProperty("java.version"));
+
+    tasks["copyRTLibs"].execute()
+    tasks["copyLibs"].execute()
+    tasks["copyBin"].execute()
+
+}
+
+task clean(dependsOn: [clean_jdk, clean_jfx]) << {
+	println(">> updating code")
+}
+
+task clean_src(dependsOn: [clean_src_jdk, clean_src_jfx]) << {
+	println(">> updating code")
+}
+
+task update(dependsOn: [update_jdk, update_jfx]) << {
+	println(">> updating code")
+}
+
+task assemble(dependsOn: [assemble_jdk, assemble_jfx, addToOpenJdk]) << {
+	println(">> DONE! The final JDK8+JFX8 bundle is ready: \n --> " + new File(JDK_8_BUNDLE_OSX).getPath())
+}

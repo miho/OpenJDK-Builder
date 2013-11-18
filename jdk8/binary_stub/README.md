@@ -1,0 +1,1 @@
+Add the binary stub `jfxrt.jar` to this folder.
