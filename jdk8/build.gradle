@@ -296,6 +296,31 @@ task update(dependsOn: [update_jdk, update_jfx]) << {
 	println(">> updating code")
 }
 
-task assemble(dependsOn: [assemble_jdk, assemble_jfx, addToOpenJdk]) << {
-	println(">> DONE! The final JDK8+JFX8 bundle is ready: \n --> " + new File(JDK_8_BUNDLE_OSX).getPath())
+task cleanDist {
+	new File("dist").deleteDir();
 }
+
+task zipJDK(type:Zip) {
+   java.text.DateFormat formatter = new java.text.SimpleDateFormat('yyyy-MM-dd_HH-mm-ss', Locale.US)   
+   def currentDate = formatter.format(new Date())
+
+	from JDK_8_BUNDLE_OSX
+	into "jdk1.8.0.jdk"
+	archiveName "jdk1.8.0.zip"
+	destinationDir new File("dist/"+currentDate) 
+	   
+   doLast {
+	   println(">> distribution done:");
+       println(">> --> location: dist/$currentDate/jdk1.8.0.zip")
+   }
+}
+
+task distribute(dependsOn: zipJDK) << {
+	//
+}
+
+task assemble(dependsOn: [assemble_jdk, assemble_jfx, addToOpenJdk, distribute]) << {
+	//println(">> DONE! The final JDK8+JFX8 bundle is ready: \n --> " + new File(JDK_8_BUNDLE_OSX).getPath())
+}
+
+
